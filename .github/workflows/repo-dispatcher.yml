@@ -20,6 +20,10 @@ on:
         description: 'parameter'
         required: false
         default: ''
+      device:
+        description: 'Specific device to build (leave empty for all devices)'
+        required: false
+        default: ''
 
 env:
   TOKEN_KIDDIN9: ${{ secrets.TOKEN_KIDDIN9 }}
@@ -63,6 +67,11 @@ jobs:
     - name: Trigger Compile
       run: |
         sudo timedatectl set-timezone "$TZ"
+        if [ -n "${{ github.event.inputs.device }}" ]; then
+          device_param="device=${{ github.event.inputs.device }}"
+        else
+          device_param=""
+        fi
           curl \
           -X POST https://api.github.com/repos/${{ github.repository }}/dispatches \
           -H "Accept: application/vnd.github.everest-preview+json" \
@@ -188,3 +197,18 @@ jobs:
           -H "Accept: application/vnd.github.everest-preview+json" \
           -H "Authorization: token ${{ secrets.TOKEN_KIDDIN9 }}" \
           -d '{"event_type": "ath79_nand ${{ github.event.inputs.param }}", "client_payload": {"target": "ath79_nand"}}'
+          curl \
+          -X POST https://api.github.com/repos/${{ github.repository }}/dispatches \
+          -H "Accept: application/vnd.github.everest-preview+json" \
+          -H "Authorization: token ${{ secrets.TOKEN_KIDDIN9 }}" \
+          -d '{"event_type": "mediatek_mt7981 ${{ github.event.inputs.param }} '"$device_param"'", "client_payload": {"target": "mediatek_mt7981", "device": "${{ github.event.inputs.device }}"}}'
+
+    - name: Trigger Compile for Specific Device
+      if: github.event.inputs.device == 'cf-e393ax'
+      run: |
+        curl \
+        -X POST https://api.github.com/repos/${{ github.repository }}/dispatches \
+        -H "Accept: application/vnd.github.everest-preview+json" \
+        -H "Authorization: token ${{ secrets.TOKEN_KIDDIN9 }}" \
+        -d '{"event_type": "mediatek_mt7981 ${{ github.event.inputs.param }} device=cf-e393ax", "client_payload": {"target": "mediatek_mt7981", "device": "comfast_cf-e393ax"}}'
+
