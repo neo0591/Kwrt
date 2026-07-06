@@ -1,0 +1,11 @@
+{
+  "buildId": "a197446b-bae1-4e52-91c1-971886781e76",
+  "target": "mediatek_filogic",
+  "deviceProfile": "mediatek_filogic/zbtlink_zbt-z8103ax",
+  "packages": [
+    "luci-app-nlbwmon"
+  ],
+  "defaults": "chmod 777 -R /usr/local/\necho neowrt-test > /tmp/neowrt-init.txt",
+  "customFiles": null,
+  "createdAt": "2026-07-06T08:24:09.666Z"
+}
