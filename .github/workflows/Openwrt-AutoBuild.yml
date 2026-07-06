@@ -35,9 +35,10 @@ jobs:
         
     steps:
     - name: Checkout
-      uses: actions/checkout@main
+      uses: actions/checkout@v4
       with:
-          fetch-depth: 0
+        ref: master
+        fetch-depth: 0
 
     # - name: Set up secret file
       # run: |
@@ -171,7 +172,7 @@ jobs:
           fi
           git sparse-checkout init --cone
           git sparse-checkout set $@
-          [[ "$mv" != "mv" ]] && cp -rn ./* $rootdir/ || mv -n $@/* $rootdir/$@/
+          [[ "$mv" != "mv" ]] && cp -r --update=none ./* $rootdir/ || mv --update=none $@/* $rootdir/$@/
           cd $rootdir
           }
         export -f git_clone_path
@@ -206,12 +207,8 @@ jobs:
     - name: Apply patches
       run: |
         cd openwrt
-        cp -rn devices/common/patches devices/${{matrix.target}}/
-          if [ -n "$(ls -A devices/${{matrix.target}}/*.bin.patch 2>/dev/null)" ]; then
-            git apply devices/${{matrix.target}}/patches/*.bin.patch
-          fi
-          find "devices/${{matrix.target}}/patches" -maxdepth 1 -type f -name '*.revert.patch' -print0 | sort -z | xargs -I % -t -0 -n 1 sh -c "patch -d './' -R -b -p1 -f --ignore-whitespace -i '%'"
-          find "devices/${{matrix.target}}/patches" -maxdepth 1 -type f -name '*.patch' ! -name '*.revert.patch' ! -name '*.bin.patch' -print0 | sort -z | xargs -I % -t -0 -n 1 sh -c "patch -d './' -b -p1 -f --ignore-whitespace -i '%'"
+        chmod +x devices/common/apply-patches.sh
+        devices/common/apply-patches.sh "$(pwd)" "${{matrix.target}}"
         sed -i '$a  \
         CONFIG_CPU_FREQ_GOV_POWERSAVE=y \
         CONFIG_CPU_FREQ_GOV_USERSPACE=y \

@@ -1,0 +1,156 @@
+# 备货专用：全量编译并同步 ImageBuilder + packages 到构建 VPS
+# 不响应用户在线构建请求
+
+name: Supply ImageBuilder
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Kwrt devices target (e.g. mediatek_filogic)
+        required: true
+        type: string
+  schedule:
+    - cron: '0 4 * * 0'  # 每周日 12:00 北京时间
+
+env:
+  REPO_TOKEN: ${{ secrets.TOKEN_KIDDIN9 }}
+  TZ: Asia/Shanghai
+
+jobs:
+  supply:
+    runs-on: ubuntu-latest
+    name: Supply ${{ inputs.target || 'mediatek_filogic' }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        ref: master
+        fetch-depth: 0
+
+    - name: Resolve target
+      run: |
+        T="${{ inputs.target }}"
+        [ -z "$T" ] && T="mediatek_filogic"
+        echo "MATRIX_TARGET=$T" >> $GITHUB_ENV
+
+    - name: Load Settings.ini
+      run: |
+        source "${{ github.workspace }}/devices/common/settings.ini"
+        if [ -f "devices/${MATRIX_TARGET}/settings.ini" ]; then
+          source "${{ github.workspace }}/devices/${MATRIX_TARGET}/settings.ini"
+        fi
+        echo "REPO_URL=${REPO_URL}" >> $GITHUB_ENV
+        echo "REPO_BRANCH=${REPO_BRANCH}" >> $GITHUB_ENV
+        echo "CONFIG_FILE=${CONFIG_FILE}" >> $GITHUB_ENV
+        echo "DIY_SH=${DIY_SH}" >> $GITHUB_ENV
+        sed -i "1a REPO_TOKEN=${{ secrets.TOKEN_KIDDIN9 }}" devices/common/diy.sh
+        sed -i "1a TARGET=${MATRIX_TARGET}" devices/common/diy.sh
+
+    - name: Free disk space
+      uses: coder-xiaomo/free-disk-space@main
+      with:
+        tool-cache: false
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: true
+
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install build-essential clang flex bison g++ gawk \
+        gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+        python3-setuptools rsync swig unzip zlib1g-dev file wget \
+        llvm python3-pyelftools libpython3-dev aria2 jq qemu-utils ccache rename \
+        libelf-dev device-tree-compiler libgmp3-dev libmpc-dev libfuse-dev
+        sudo timedatectl set-timezone "Asia/Shanghai"
+
+    - name: Clone source code
+      run: |
+        REPO_BRANCH="openwrt-25.12"
+        echo "CONFIG_VERSION_REPO=\"https://dl.openwrt.ai/releases/25.12\"" >> devices/common/.config
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
+
+    - name: Free up disk space
+      run: |
+        sudo mkdir -p -m 777 /mnt/openwrt/build_dir openwrt/staging_dir
+        ln -sf /mnt/openwrt/build_dir openwrt/build_dir
+        sudo ln -sf openwrt/staging_dir /mnt/openwrt/staging_dir
+
+    - name: Load custom configuration
+      run: |
+        cp -rf devices/common/. openwrt/
+        cp -rf devices/${MATRIX_TARGET}/. openwrt/
+        cp -rf devices openwrt/
+        cd openwrt
+        chmod +x devices/common/$DIY_SH
+        /bin/bash "devices/common/$DIY_SH"
+        cp -f devices/common/$CONFIG_FILE .config
+        if [ -f "devices/${MATRIX_TARGET}/$CONFIG_FILE" ]; then
+          echo >> .config
+          cat devices/${MATRIX_TARGET}/$CONFIG_FILE >> .config
+        fi
+        if [ -f "devices/${MATRIX_TARGET}/$DIY_SH" ]; then
+          chmod +x devices/${MATRIX_TARGET}/$DIY_SH
+          /bin/bash "devices/${MATRIX_TARGET}/$DIY_SH"
+        fi
+        cp -Rf ./diy/* ./ || true
+
+    - name: Apply patches
+      run: |
+        cd openwrt
+        chmod +x devices/common/apply-patches.sh
+        devices/common/apply-patches.sh "$(pwd)" "${MATRIX_TARGET}"
+
+    - name: Defconfig
+      run: |
+        cd openwrt
+        make defconfig
+
+    - name: Cache
+      uses: stupidloud/cachewrtbuild@main
+      with:
+        ccache: 'false'
+        mixkey: ${{ env.MATRIX_TARGET }}
+        prefix: ${{ github.workspace }}/openwrt
+
+    - name: Compile firmware and ImageBuilder
+      run: |
+        cd openwrt
+        make -j$(($(nproc)+1)) || make -j1 V=s
+        ls -la bin/targets/*/*/kwrt-imagebuilder-* || ls -la bin/targets/*/*/openwrt-imagebuilder-*
+
+    - name: Upload supply artifact
+      uses: actions/upload-artifact@main
+      with:
+        name: imagebuilder-${{ env.MATRIX_TARGET }}
+        path: |
+          openwrt/bin/targets/**/kwrt-imagebuilder-*
+          openwrt/bin/targets/**/openwrt-imagebuilder-*
+          openwrt/bin/targets/**/packages/
+
+    - name: Deploy ImageBuilder to build server
+      if: secrets.BUILD_SERVER_SSH_KEY != ''
+      uses: easingthemes/ssh-deploy@main
+      with:
+        SSH_PRIVATE_KEY: ${{ secrets.BUILD_SERVER_SSH_KEY }}
+        ARGS: "-avr --timeout=600 --include='kwrt-imagebuilder-*' --include='openwrt-imagebuilder-*' --include='packages/**'"
+        SSH_CMD_ARGS: "-o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no"
+        SOURCE: openwrt/bin/targets
+        REMOTE_HOST: ${{ secrets.BUILD_SERVER_HOST }}
+        REMOTE_USER: ${{ secrets.BUILD_SERVER_USER }}
+        REMOTE_PORT: ${{ secrets.BUILD_SERVER_PORT || 22 }}
+        TARGET: "/opt/neowrt/releases/tmp/"
+
+    - name: Remote refresh pool
+      if: secrets.BUILD_SERVER_SSH_KEY != ''
+      run: |
+        ssh -o StrictHostKeyChecking=no -p "${{ secrets.BUILD_SERVER_PORT || 22 }}" \
+          "${{ secrets.BUILD_SERVER_USER }}@${{ secrets.BUILD_SERVER_HOST }}" \
+          "NEOWRT_ROOT=/opt/neowrt /opt/neowrt/bin/neowrt-sync-from-ga.sh && /opt/neowrt/bin/neowrt-ib-pool.sh ${MATRIX_TARGET}"
