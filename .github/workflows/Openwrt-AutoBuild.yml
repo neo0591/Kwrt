@@ -194,7 +194,7 @@ jobs:
         cp -Rf ./diy/* ./ || true
 
     - name: Apply NeoWrt build customization
-      if: ${{ github.event.client_payload.build_id != '' }}
+      if: github.event.client_payload.build_id
       env:
         NEOWRT_BUILD_ID: ${{ github.event.client_payload.build_id }}
         TOKEN_KIDDIN9: ${{ secrets.TOKEN_KIDDIN9 }}
