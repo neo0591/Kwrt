@@ -63,38 +63,6 @@ jobs:
         echo "UPLOAD_FIRMWARE_TO_WETRANSFER=${UPLOAD_FIRMWARE_TO_WETRANSFER}" >> $GITHUB_ENV
         sed -i "1a REPO_TOKEN=${{ secrets.TOKEN_KIDDIN9 }}" ${{ github.workspace }}/devices/common/diy.sh
         sed -i "1a TARGET=${{matrix.target}}" ${{ github.workspace }}/devices/common/diy.sh
-        if [ ${{matrix.target}} == "x86_64" ]; then
-            echo "ARCH=linux/amd64" >> $GITHUB_ENV
-            echo "MTARGET=x86_64" >> $GITHUB_ENV
-        elif [ ${{matrix.target}} == "x86_generic" ]; then
-            echo "ARCH=linux/amd32" >> $GITHUB_ENV
-            echo "MTARGET=x86_generic" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} =~ (armsr_armv8|qualcommax_ipq807x|mediatek_mt7622|mediatek_filogic|bcm27xx_bcm2710|qualcommax_ipq60xx|bcm4908_generic|sunxi_cortexa53|amlogic_mesongx|airoha_an7581) ]]; then
-            echo "MTARGET=aarch64_cortex-a53" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} =~ (ramips_mt7621|ramips_mt7620|ramips_mt76x8) ]]; then
-            echo "MTARGET=mipsel_24kc" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} == "ath79_nand" ]]; then
-            echo "MTARGET=mips_24kc" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} =~ (ipq40xx_generic|bcm27xx_bcm2709|sunxi_cortexa7|qualcommax_ipq50xx) ]]; then
-            echo "MTARGET=arm_cortex-a7_neon-vfpv4" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} == "amlogic_meson8b" ]]; then
-            echo "MTARGET=arm_cortex-a5_vfpv4" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} == "bcm53xx" ]]; then
-            echo "MTARGET=arm_cortex-a9" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} == "mvebu_cortexa9" ]]; then
-            echo "MTARGET=arm_cortex-a9_vfpv3-d16" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} == "ipq806x_generic" ]]; then
-            echo "MTARGET=arm_cortex-a15_neon-vfpv4" >> $GITHUB_ENV
-        elif [[ ${{matrix.target}} == "bcm27xx_bcm2708" ]]; then
-            echo "MTARGET=arm_arm1176jzf-s_vfp" >> $GITHUB_ENV
-        else
-          echo "ARCH=linux/arm64" >> $GITHUB_ENV
-          if [[ ${{matrix.target}} == "bcm27xx_bcm2711" ]]; then
-            echo "MTARGET=aarch64_cortex-a72" >> $GITHUB_ENV
-          elif [[ ${{matrix.target}} == rockchip* ]]; then
-            echo "MTARGET=aarch64_generic" >> $GITHUB_ENV
-          fi
-        fi
 
     - name: Trigger Packages Update
       continue-on-error: true
@@ -149,15 +117,15 @@ jobs:
         TAG_INFO="$(curl -gs -H 'Content-Type: application/json' \
            -H "Authorization: Bearer ${{ secrets.TOKEN_KIDDIN9 }}" \
            -X POST -d '{ "query": "query {repository(owner: \"openwrt\", name: \"openwrt\") {refs(refPrefix: \"refs/tags/\", first: 4, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {nodes {name target { ... on Tag {tagger {date}}}}}}}"}' https://api.github.com/graphql)"
-        TAG_DATE="$( echo ${TAG_INFO} | jq -r '.data.repository.refs.nodes[] | select(.name | startswith("v24")) | .target.tagger.date' | head -n 1)"
-        if [[ $(( ($(date +%s) - $(date -d "$TAG_DATE" +%s)) / 86400 )) -lt 15 ]]; then
-        REPO_BRANCH="$( echo ${TAG_INFO} | jq -r '.data.repository.refs.nodes[].name' | grep v24 | head -n 1)"
-        #REPO_BRANCH="openwrt-24.10"
+        TAG_DATE="$( echo ${TAG_INFO} | jq -r '.data.repository.refs.nodes[] | select(.name | startswith("v25")) | .target.tagger.date' | head -n 1)"
+        if [[ $(( ($(date +%s) - $(date -d "$TAG_DATE" +%s)) / 86400 )) -lt 10 || "${{ contains(github.event.action, 'tags') }}" == "true" ]]; then
+        REPO_BRANCH="$( echo ${TAG_INFO} | jq -r '.data.repository.refs.nodes[].name' | grep v25 | head -n 1)"
+        REPO_BRANCH="openwrt-25.12"
         else
-        REPO_BRANCH="openwrt-24.10"
+        REPO_BRANCH="openwrt-25.12"
         fi
         #echo "CONFIG_VERSION_REPO=\"https://dl.openwrt.ai/releases/`echo $REPO_BRANCH  | cut -d . -f 1,2 | sed -e 's/^v//'`\"">>devices/common/.config
-        echo "CONFIG_VERSION_REPO=\"https://dl.openwrt.ai/releases/24.10\"">>devices/common/.config
+        echo "CONFIG_VERSION_REPO=\"https://dl.openwrt.ai/releases/25.12\"">>devices/common/.config
         if [[ ! "${{ env.REPO_BRANCH }}" && "$REPO_URL" == "https://github.com/openwrt/openwrt" ]]; then
             git clone $REPO_URL -b $REPO_BRANCH openwrt
         elif [[ ! "${{ env.REPO_BRANCH }}" ]]; then
@@ -177,8 +145,9 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo mkdir -p -m 777 /mnt/openwrt/dl /mnt/openwrt/staging_dir /mnt/openwrt/build_dir
+        sudo mkdir -p -m 777 /mnt/openwrt/build_dir openwrt/staging_dir
         ln -sf /mnt/openwrt/build_dir openwrt/build_dir
+        sudo ln -sf openwrt/staging_dir /mnt/openwrt/staging_dir
 
     - name: Load custom configuration
       run: |
@@ -224,6 +193,16 @@ jobs:
         fi
         cp -Rf ./diy/* ./ || true
 
+    - name: Apply NeoWrt build customization
+      if: ${{ github.event.client_payload.build_id != '' }}
+      env:
+        NEOWRT_BUILD_ID: ${{ github.event.client_payload.build_id }}
+        TOKEN_KIDDIN9: ${{ secrets.TOKEN_KIDDIN9 }}
+      run: |
+        cd openwrt
+        chmod +x devices/common/neowrt-apply.sh
+        NEOWRT_BUILD_ID="$NEOWRT_BUILD_ID" devices/common/neowrt-apply.sh
+
     - name: Apply patches
       run: |
         cd openwrt
@@ -231,8 +210,8 @@ jobs:
           if [ -n "$(ls -A devices/${{matrix.target}}/*.bin.patch 2>/dev/null)" ]; then
             git apply devices/${{matrix.target}}/patches/*.bin.patch
           fi
-          find "devices/${{matrix.target}}/patches" -maxdepth 1 -type f -name '*.revert.patch' -print0 | sort -z | xargs -I % -t -0 -n 1 sh -c "cat '%'  | patch -d './' -R -B --merge -p1 --forward"
-          find "devices/${{matrix.target}}/patches" -maxdepth 1 -type f -name '*.patch' ! -name '*.revert.patch' ! -name '*.bin.patch' -print0 | sort -z | xargs -I % -t -0 -n 1 sh -c "cat '%'  | patch -d './' -B --merge -p1 --forward"
+          find "devices/${{matrix.target}}/patches" -maxdepth 1 -type f -name '*.revert.patch' -print0 | sort -z | xargs -I % -t -0 -n 1 sh -c "patch -d './' -R -b -p1 -f --ignore-whitespace -i '%'"
+          find "devices/${{matrix.target}}/patches" -maxdepth 1 -type f -name '*.patch' ! -name '*.revert.patch' ! -name '*.bin.patch' -print0 | sort -z | xargs -I % -t -0 -n 1 sh -c "patch -d './' -b -p1 -f --ignore-whitespace -i '%'"
         sed -i '$a  \
         CONFIG_CPU_FREQ_GOV_POWERSAVE=y \
         CONFIG_CPU_FREQ_GOV_USERSPACE=y \
@@ -247,12 +226,9 @@ jobs:
       run: |
         cd openwrt
         make defconfig
-        if [[ ! "${{matrix.target}}" =~ (amlogic_*|armsr_armv8|bcm27xx_*|rockchip_armv8|sunxi_*|x86_*) ]]; then
+        if [[ ! "${{matrix.target}}" =~ (amlogic_meson8b|armsr_armv8|bcm27xx_*|rockchip_armv8|sunxi_*|x86_*|siflower_*) ]]; then
         sed -n '/# Wireless Drivers/,/# end of Wireless Drivers/p' .config | sed -e 's/=m/=n/' >>.config
-        #sed -i "s/\(kmod-qca.*\)=m/\1=n/" .config
-        if [[ "${{matrix.target}}" == "rockchip_rk35xx" ]]; then 
-            sed -n '/# Video Support/,/# end of Video Support/p' .config | sed -e 's/=m/=n/' >>.config
-        fi
+        sed -i "s/\(kmod-qca.*\)=m/\1=n/" .config
         make defconfig
         fi
         cat .config
@@ -260,19 +236,10 @@ jobs:
     - name: Cache
       uses: stupidloud/cachewrtbuild@main
       with:
-        ccache: 'true'
+        ccache: 'false'
         mixkey: ${{ matrix.target }}
         clean: ${{ contains(github.event.action, 'nocache') }}
         prefix: ${{ github.workspace }}/openwrt
-    
-    - name: Check space usage
-      run: |
-        shopt -s extglob
-        cd openwrt
-        if [[ -f staging_dir/*${{ env.MTARGET }}*/bin ]]; then
-            rm -rf staging_dir/!(*${{ env.MTARGET }}*|host|hostpkg) build_dir/!(*${{ env.MTARGET }}*|host|hostpkg)
-        fi
-        df -hT
 
     - name: SSH connection to Actions
       uses: kiddin9/debugger-action@master
@@ -282,10 +249,10 @@ jobs:
       id: compile
       run: |
         shopt -s extglob
+        df -hT
         cd openwrt
         echo -e "$(($(nproc)+1)) thread compile"
-        make -j$(($(nproc)+1)) || make V=s &>build.log || (tail -50 build.log; curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=❌ OpenWrt ${{ env.VERSION }} ${{matrix.target}} 编译失败 😂" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage";df -hT;exit 1)
-        sed -i "s/# CONFIG_IB is not set/CONFIG_IB=y/" .config
+        make -j$(($(nproc)+1)) || { log=$(mktemp);make V=s &>$log; } || { tail -50 $log; curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=鉂?OpenWrt ${{ env.VERSION }} ${{matrix.target}} 缂栬瘧澶辫触 馃槀" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage";df -hT;exit 1; }
         rm -rf staging_dir/toolchain-*/bin/*openwrt-linux-musl-lto-dump
         rm -rf staging_dir/toolchain-*/initial
         df -hT
@@ -298,8 +265,7 @@ jobs:
         cd openwrt/bin/targets/*/*/
         cp $GITHUB_WORKSPACE/openwrt/.config ${{matrix.target}}.config || true
         cp $GITHUB_WORKSPACE/openwrt/build_dir/target-*/linux-*/linux-*/.config ${{matrix.target}}_kernel.config || true
-        rm -rf kwrt-!(*imagebuilder*)
-        Emoji=("🎉" "🤞" "✨" "🎁" "🎈" "🎄" "🎨" "💋" "🍓" "🍕" "🍉" "💐" "🌴" "🚀" "🛸" "🗽" "⛅" "🌈" "🔥" "⛄" "🐶" "🏅" "🦄" "🐤")
+        Emoji=("馃帀" "馃" "鉁? "馃巵" "馃巿" "馃巹" "馃帹" "馃拫" "馃崜" "馃崟" "馃崏" "馃拹" "馃尨" "馃殌" "馃浉" "馃椊" "鉀? "馃寛" "馃敟" "鉀? "馃惗" "馃弲" "馃" "馃悿")
         echo "EMOJI=${Emoji[$[$RANDOM % ${#Emoji[@]}]]}" >> $GITHUB_ENV
 
     - name: Upload firmware for artifact
@@ -315,11 +281,12 @@ jobs:
       if: env.SSH_PRIVATE_KEY && ! contains(github.event.action, 'noser')
       with:
         SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        ARGS: "-avzr"
+        ARGS: "-avr --timeout=600 --include='kwrt-imagebuilder-*' --include='kwrt-*-initramfs*' --exclude='kwrt-*'"
+        SSH_CMD_ARGS: "-o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o StrictHostKeyChecking=no"
         SOURCE: openwrt/bin/targets
         REMOTE_HOST: ${{ secrets.SERVER_HOST }}
+        REMOTE_USER: ${{ secrets.SERVER_USERNAME }}
         REMOTE_PORT: ${{ secrets.SERVER_PORT }}
-        REMOTE_USER: root
         TARGET: "/www/wwwroot/dl.openwrt.ai/releases/tmp/"
 
     - name: Create release
@@ -327,10 +294,10 @@ jobs:
       if: env.REPO_TOKEN && env.UPLOAD_FIRMWARE_FOR_RELEASE == 'true'
       continue-on-error: true
       run: |
-        echo -e "墙内加速下载 🚀:\n" >> release.txt
-        echo -e "[腾讯云] (https://dl.openwrt.ai/firmware/${{matrix.target}}/ ☁)\n" >> release.txt
-        [ ${{ env.WETRANS }} ] && echo -e "[WeTransfer] (${{ env.WETRANS }} 🗽)\n" >> release.txt
-        [ ${{ env.COWURL }} ] && echo -e "[奶牛上传] (${{ env.COWURL }} 🐮)\n" >> release.txt
+        echo -e "澧欏唴鍔犻€熶笅杞?馃殌:\n" >> release.txt
+        echo -e "[鑵捐浜慮 (https://dl.openwrt.ai/firmware/${{matrix.target}}/ 鈽?\n" >> release.txt
+        [ ${{ env.WETRANS }} ] && echo -e "[WeTransfer] (${{ env.WETRANS }} 馃椊)\n" >> release.txt
+        [ ${{ env.COWURL }} ] && echo -e "[濂剁墰涓婁紶] (${{ env.COWURL }} 馃惍)\n" >> release.txt
         [ ${{ env.NOTICE }} ] && echo -e "${{ env.NOTICE }}" >> release.txt || true
 
     - name: Upload firmware for release
@@ -349,13 +316,13 @@ jobs:
       continue-on-error: true
       if: env.SCKEY
       run: |
-        # [ steps.compile.outputs.status == 'success' ] && curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=🎉OpenWrt_${{ env.VERSION }}_${{matrix.target}}编译完成😋|| curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=❌OpenWrt_${{ env.VERSION }}_${{matrix.target}}编译失败😂
+        # [ steps.compile.outputs.status == 'success' ] && curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=馃帀OpenWrt_${{ env.VERSION }}_${{matrix.target}}缂栬瘧瀹屾垚馃構|| curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=鉂孫penWrt_${{ env.VERSION }}_${{matrix.target}}缂栬瘧澶辫触馃槀
 
     - name: Telegram notification
       if: env.TELEGRAM_TOKEN && ! contains(github.event.action, 'notg')
       continue-on-error: true
       run: |
-        curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=🎉 OpenWrt ${{ env.VERSION }} ${{matrix.target}} 编译成功 😋  https://dl.openwrt.ai/firmware/${{matrix.target}}/  ${{ env.COWURL }}   ${{ env.WETRANS }} 🚀" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage"
+        curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=馃帀 OpenWrt ${{ env.VERSION }} ${{matrix.target}} 缂栬瘧鎴愬姛 馃構  https://dl.openwrt.ai/firmware/${{matrix.target}}/  ${{ env.COWURL }}   ${{ env.WETRANS }} 馃殌" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage"
 
     - name: Delete workflow runs
       uses: GitRML/delete-workflow-runs@main
