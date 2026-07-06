@@ -1,0 +1,9 @@
+{
+  "buildId": "6378b9d2-0709-4d1a-9456-ef3ee5612557",
+  "target": "mediatek_filogic",
+  "deviceProfile": "mediatek_filogic/zbtlink_zbt-z8103ax",
+  "packages": [],
+  "defaults": "",
+  "customFiles": null,
+  "createdAt": "2026-07-06T09:48:16.152Z"
+}
