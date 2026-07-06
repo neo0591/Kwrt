@@ -1,0 +1,86 @@
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/01_leds
+@@ -164,6 +164,10 @@ nokia,ea0326gmp)
+ 	ucidef_set_led_netdev "lan" "LAN" "green:lan" "br-lan" "link"
+ 	ucidef_set_led_netdev "wlan" "WLAN" "green:wlan" "phy1-ap0" "link"
+ 	;;
++nradio,c8-660)
++	ucidef_set_led_netdev "wifi" "WIFI" "blue:wifi" "phy0-ap0"
++	ucidef_set_led_netdev "5g" "5G" "blue:cmode5" "eth1" "link tx rx"
++	;;
+ nradio,c8-668gl)
+ 	ucidef_set_led_netdev "wifi" "WIFI" "blue:wlan" "phy1-ap0" "link"
+ 	ucidef_set_led_netdev "5g" "5G" "blue:indicator-0" "eth1" "link"
+
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+@@ -66,6 +66,7 @@ mediatek_setup_interfaces()
+ 	mediatek,mt7981-rfb|\
+ 	netcore,n60|\
+ 	netcore,n60-pro|\
++	nradio,c8-660|\
+ 	nradio,c8-668gl|\
+ 	ruijie,rg-x60-pro|\
+ 	unielec,u7981-01*|\
+@@ -244,6 +245,7 @@ mediatek_setup_macs()
+ 		lan_mac=$(mtd_get_mac_ascii u-boot-env mac)
+ 		label_mac=$lan_mac
+ 		;;
++	nradio,c8-660|\
+ 	nradio,c8-668gl)
+ 		lan_mac=$(mmc_get_mac_ascii bdinfo "fac_mac ")
+ 		wan_mac=$(macaddr_add "$lan_mac" 2)
+
+--- a/target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac
++++ b/target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac
+@@ -183,6 +183,7 @@ case "$board" in
+ 		[ "$PHYNBR" = "0" ] && macaddr_add $addr 1 > /sys${DEVPATH}/macaddress
+ 		[ "$PHYNBR" = "1" ] && macaddr_add $addr 2 > /sys${DEVPATH}/macaddress
+ 		;;
++	c8-668gl|\
+ 	nradio,c8-668gl)
+ 		hw_mac_addr=$(mmc_get_mac_ascii bdinfo "fac_mac ")
+ 		[ "$PHYNBR" = "0" ] && echo "$hw_mac_addr" > /sys${DEVPATH}/macaddress
+
+
+--- a/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
++++ b/package/boot/uboot-tools/uboot-envtools/files/mediatek_filogic
+@@ -60,7 +60,8 @@ glinet,gl-mt6000|\
+ glinet,gl-x3000|\
+ glinet,gl-xe3000|\
+ huasifei,wh3000|\
+-nradio,c8-668gl)
++nradio,c8-668gl|\
++umi,uax3000e)
+ 	ubootenv_add_mmc "u-boot-env" "" "0x0" "0x80000"
+ 	;;
+ asiarf,ap7986-003|\
+
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -2220,6 +2220,25 @@ define Device/nokia_ea0326gmp
+ endef
+ TARGET_DEVICES += nokia_ea0326gmp
+ 
++define Device/nradio_c8-660
++  DEVICE_VENDOR := NRadio
++  DEVICE_MODEL := C8-660
++  DEVICE_DTS := mt7981b-nradio-c8-660
++  DEVICE_DTS_DIR := ../dts
++  UBINIZE_OPTS := -E 5
++  BLOCKSIZE := 128k
++  PAGESIZE := 2048
++  IMAGE_SIZE := 131072k
++  KERNEL_IN_UBI := 1
++  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7981-firmware mt7981-wo-firmware \
++	kmod-usb-serial-option kmod-usb-net-cdc-ether kmod-usb-net-qmi-wwan \
++	kmod-usb3
++  IMAGES += factory.bin
++  IMAGE/factory.bin := append-ubi | check-size $$$$(IMAGE_SIZE)
++  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
++endef
++TARGET_DEVICES += nradio_c8-660
++
+ define Device/nradio_c8-668gl
+   DEVICE_VENDOR := NRadio
+   DEVICE_MODEL := C8-668GL

@@ -252,7 +252,7 @@ jobs:
         df -hT
         cd openwrt
         echo -e "$(($(nproc)+1)) thread compile"
-        make -j$(($(nproc)+1)) || { log=$(mktemp);make V=s &>$log; } || { tail -50 $log; curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=鉂?OpenWrt ${{ env.VERSION }} ${{matrix.target}} 缂栬瘧澶辫触 馃槀" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage";df -hT;exit 1; }
+        make -j$(($(nproc)+1)) || { log=$(mktemp);make V=s &>$log; } || { tail -50 $log; curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=❌ OpenWrt ${{ env.VERSION }} ${{matrix.target}} 编译失败 😂" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage";df -hT;exit 1; }
         rm -rf staging_dir/toolchain-*/bin/*openwrt-linux-musl-lto-dump
         rm -rf staging_dir/toolchain-*/initial
         df -hT
@@ -265,7 +265,7 @@ jobs:
         cd openwrt/bin/targets/*/*/
         cp $GITHUB_WORKSPACE/openwrt/.config ${{matrix.target}}.config || true
         cp $GITHUB_WORKSPACE/openwrt/build_dir/target-*/linux-*/linux-*/.config ${{matrix.target}}_kernel.config || true
-        Emoji=("馃帀" "馃" "鉁? "馃巵" "馃巿" "馃巹" "馃帹" "馃拫" "馃崜" "馃崟" "馃崏" "馃拹" "馃尨" "馃殌" "馃浉" "馃椊" "鉀? "馃寛" "馃敟" "鉀? "馃惗" "馃弲" "馃" "馃悿")
+        Emoji=("🎉" "🤞" "✨" "🎁" "🎈" "🎄" "🎨" "💋" "🍓" "🍕" "🍉" "💐" "🌴" "🚀" "🛸" "🗽" "⛅" "🌈" "🔥" "⛄" "🐶" "🏅" "🦄" "🐤")
         echo "EMOJI=${Emoji[$[$RANDOM % ${#Emoji[@]}]]}" >> $GITHUB_ENV
 
     - name: Upload firmware for artifact
@@ -294,10 +294,10 @@ jobs:
       if: env.REPO_TOKEN && env.UPLOAD_FIRMWARE_FOR_RELEASE == 'true'
       continue-on-error: true
       run: |
-        echo -e "澧欏唴鍔犻€熶笅杞?馃殌:\n" >> release.txt
-        echo -e "[鑵捐浜慮 (https://dl.openwrt.ai/firmware/${{matrix.target}}/ 鈽?\n" >> release.txt
-        [ ${{ env.WETRANS }} ] && echo -e "[WeTransfer] (${{ env.WETRANS }} 馃椊)\n" >> release.txt
-        [ ${{ env.COWURL }} ] && echo -e "[濂剁墰涓婁紶] (${{ env.COWURL }} 馃惍)\n" >> release.txt
+        echo -e "墙内加速下载 🚀:\n" >> release.txt
+        echo -e "[腾讯云] (https://dl.openwrt.ai/firmware/${{matrix.target}}/ ☁)\n" >> release.txt
+        [ ${{ env.WETRANS }} ] && echo -e "[WeTransfer] (${{ env.WETRANS }} 🗽)\n" >> release.txt
+        [ ${{ env.COWURL }} ] && echo -e "[奶牛上传] (${{ env.COWURL }} 🐮)\n" >> release.txt
         [ ${{ env.NOTICE }} ] && echo -e "${{ env.NOTICE }}" >> release.txt || true
 
     - name: Upload firmware for release
@@ -316,13 +316,13 @@ jobs:
       continue-on-error: true
       if: env.SCKEY
       run: |
-        # [ steps.compile.outputs.status == 'success' ] && curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=馃帀OpenWrt_${{ env.VERSION }}_${{matrix.target}}缂栬瘧瀹屾垚馃構|| curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=鉂孫penWrt_${{ env.VERSION }}_${{matrix.target}}缂栬瘧澶辫触馃槀
+        # [ steps.compile.outputs.status == 'success' ] && curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=🎉OpenWrt_${{ env.VERSION }}_${{matrix.target}}编译完成😋|| curl https://sctapi.ftqq.com/${{ secrets.SCKEY }}.send?text=❌OpenWrt_${{ env.VERSION }}_${{matrix.target}}编译失败😂
 
     - name: Telegram notification
       if: env.TELEGRAM_TOKEN && ! contains(github.event.action, 'notg')
       continue-on-error: true
       run: |
-        curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=馃帀 OpenWrt ${{ env.VERSION }} ${{matrix.target}} 缂栬瘧鎴愬姛 馃構  https://dl.openwrt.ai/firmware/${{matrix.target}}/  ${{ env.COWURL }}   ${{ env.WETRANS }} 馃殌" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage"
+        curl -k --data chat_id="${{ env.TELEGRAM_CHAT_ID }}" --data "text=🎉 OpenWrt ${{ env.VERSION }} ${{matrix.target}} 编译成功 😋  https://dl.openwrt.ai/firmware/${{matrix.target}}/  ${{ env.COWURL }}   ${{ env.WETRANS }} 🚀" "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage"
 
     - name: Delete workflow runs
       uses: GitRML/delete-workflow-runs@main
