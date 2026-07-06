@@ -1,0 +1,12 @@
+{
+  "buildId": "2c8ef76a-f303-4a4f-bc5c-cad6c8819628",
+  "target": "mediatek_filogic",
+  "deviceProfile": "mediatek_filogic/zbtlink_zbt-z8103ax",
+  "packages": [
+    "luci-app-accesscontrol-plus",
+    "luci-app-ap-modem"
+  ],
+  "defaults": "",
+  "customFiles": null,
+  "createdAt": "2026-07-06T09:27:48.406Z"
+}
