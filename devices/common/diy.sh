@@ -34,8 +34,8 @@ wget -N https://github.com/immortalwrt/immortalwrt/raw/refs/heads/openwrt-24.10/
 wget -N  https://github.com/coolsnowwolf/lede/raw/refs/heads/master/package/system/fstools/patches/0200-ntfs3-with-utf8.patch -P package/system/fstools/patches/
 wget -N https://github.com/immortalwrt/immortalwrt/raw/refs/heads/master/config/Config-kernel.in -P config/
 
-rm -rf package/libs/openssl package/network/services/ppp feeds/luci/modules/luci-mod-network
-git_clone_path openwrt-24.10 https://github.com/immortalwrt/immortalwrt package/libs/openssl package/network/services/ppp 
+rm -rf feeds/luci/modules/luci-mod-network
+# OpenWrt 25.12 使用源码树自带 openssl/ppp；替换为 immortalwrt 24.10 会导致 curl 找不到 libopenssl
 git_clone_path master https://github.com/openwrt/luci modules/luci-mod-network libs/rpcd-mod-luci; mv modules/luci-mod-network feeds/luci/modules/
 wget -N https://github.com/openwrt/luci/raw/refs/heads/master/libs/rpcd-mod-luci/src/luci.c -P feeds/luci/libs/rpcd-mod-luci/src/
 
